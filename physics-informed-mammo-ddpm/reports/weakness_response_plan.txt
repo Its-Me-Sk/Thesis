@@ -1,0 +1,81 @@
+WEAKNESS -> RESPONSE PLAN  (prepared 22 Oct 2026 while S8 runs; uses only results already in hand, no new training)
+=====================================================================================================================
+
+1. ONE TRAINING SEED  (reviewer attack #1)
+   Analysis done (analysis_results.txt, part B; figure D grey band):
+   - KID of the same run at epochs 40/41/42/44 varies by 11.6 % (relative SD), 3.2x the evaluation (bootstrap) SD.
+     This is used as a proxy for training variability: an effect must exceed ~23 % (2 checkpoint SDs) to be robust.
+   - Wording (per ChatGPT review): this is variation WITHIN ONE training trajectory, not seed-to-seed variance.
+     Say "large relative to observed checkpoint variation", never "robust across seeds" or "training variance is 11.6 %".
+   - Large relative to checkpoint variation: every FP arm (+54 % to +158 %), 4 of 5 FP-derived regularisers (+31 % to +36 %),
+     dynamic thresholding (+35 % to +50 %), the acquisition noise layer (+42 %). All of these are HARMFUL effects,
+     so the negative conclusions do not depend on the seed.
+   - Within observed checkpoint variation: weight averaging (-8.6 %), best-of-2 (-8.9 %), spectral norm r2b (+4 %). These are within training noise;
+     report them as "consistent but small, not distinguishable from checkpoint variability".
+   Writing: call all CIs "evaluation-level uncertainty (over generated and reference images)", never "model uncertainty".
+
+2. "PHYSICS" AT 256 px / AFTER PROCESSING  (attack #2)
+   Analysis done (figure H): CBIS noise-level function is U-shaped and highest in dark regions (Poisson-Gaussian fit
+   R2 0.50) - not photon-noise-like. CMMD rises with brightness up to mid intensity, then flattens/falls (linear R2 0.76,
+   quadratic 0.98). Wording to use: "a simple detector-level Poisson-Gaussian model is incompatible with the processed
+   256 px CBIS-DDSM representation and approximately compatible with CMMD" - NOT "film has no acquisition physics".
+   Still needed (S9, below): measured points for CMMD, and a downsampling sweep on CMMD originals.
+
+3. METRIC VALIDITY (KID-mammo uses a classifier trained on the same data)  (attack #3)
+   Already in hand: two independent feature spaces (DINOv2, and Inception added in S8); validation MSE predicts KID
+   across 10 models (Spearman 0.89, p 0.0005) while the FP residual does not (0.18, p 0.63) - figure C.
+   Context number to report: real-vs-real KID floor = 0.0055; the baseline's generated KID ~0.49 is ~90x the floor.
+   Every intervention moves KID by 0.04-0.8 while the gap to real data stays ~0.49 - say this plainly (weak base model).
+
+4. TWO DATASETS ARE NOT TWO INDEPENDENT VALIDATIONS  (attack #4)
+   Writing: frame CBIS (digitised film) vs CMMD (digital FFDM) as a deliberate contrast of acquisition representations,
+   not as replication of the same process. Figure H is the evidence for why they differ.
+
+5. FP UNDER-POWERED / MIS-MATCHED  (attack #5)
+   Analysis done (figures E, F): |lambda g_FP| / |g_base| = 0.41 / 1.38 / 2.74; mean cos(base, FP) 0.001-0.005;
+   clipped steps 89-97 % vs 77 % in the lambda-0 control; FP gradient SNR 0.04-0.12 per sample vs 0.17 for the
+   denoising loss per micro-batch; SNR 1 needs 69-620 samples per step (>= 35 at the upper CI).
+   Wording: "the FP constraint was poorly conditioned relative to the denoising objective at the available batch size".
+
+6. MEMORISATION / DIVERSITY  (ChatGPT point 12)
+   Analysis done (part I): no near-copies - 0.0 % of generated images are closer to a training image than the 5th
+   percentile of real-to-real nearest-neighbour distances, in both feature spaces; generated->real NN distances are
+   1.22x (mammo) and 1.75x (DINOv2) the real->real ones. S4a pixel-level memorisation was 0.000 for every arm.
+   Interpretation: the generator is not copying; it is far from the real manifold (consistent with recall ~0).
+
+7b. HIGH-FREQUENCY ENERGY (exploratory, figure G2): over 12 sets, MORE fine-detail energy goes with WORSE KID
+   (Spearman +0.49, p 0.11). So neither saturation nor lost fine detail explains the KID gap on its own.
+
+7. SATURATION  (ChatGPT point 13)
+   Analysis done (figure G): over 10 image sets, saturation and KID are not positively related (Spearman -0.36, p 0.31);
+   the three sets with saturation at or below the real value (1.3 %) all have WORSE KID. Fixing a visible artefact moved
+   the distribution away from the real data.
+
+LABELLING OF EXPERIMENTS (ChatGPT point 16 - important)
+   S3, S4a, S5, S6, S7: decision rules were written into the scripts/notebooks BEFORE each run, but they were not
+   registered publicly. Call them "experiments with decision rules pre-specified before each run" (or "internally
+   pre-specified"), NOT "pre-registered". Reserve "pre-registered" for S8 - and make that claim checkable: upload
+   S8_preregistration.txt (with Addendum 1) to OSF (osf.io, free) or commit it to a public GitHub repo NOW, before S8
+   results exist, so it carries an independent timestamp.
+   Paper results tables: three separate groups - confirmatory (S8 C1-C5), pre-specified earlier stages (S3-S7),
+   exploratory (checkpoint variation, correlations, memorisation, saturation/HF, S9 analyses).
+
+CORRECTIONS TO NUMBERS I GAVE YOU EARLIER (use these in the paper)
+   - "clipped 89-97 % of steps" must be reported next to the control's 77 %.
+   - Samples needed for FP gradient SNR 1: 69-620 (point estimates), >= 35 at the upper CI - not "8-70".
+   - Between-checkpoint KID SD: 3.2x the sampling SD over epochs 40-44 (6.4x if epoch 35 is included).
+   - CMMD noise curve is hump-shaped (rises, then falls) - do not write "variance rises with brightness" without qualification.
+   - CMMD counts: the Kaggle/TCIA copy has 5,202 DICOM images (1,775 patients); cohort D1 = 2,214 images, matching the
+     Scientific Data descriptor. Do not copy ChatGPT's "3,728".
+   - Verify before citing (ChatGPT cited them; I have not checked them): Hwang et al. (film CBIS hurting digital EMBED
+     models), the 2024 DBT-downsampling study, the 2025 ODE/SDE Fokker-Planck residual paper.
+
+PROPOSED S9 - EXPLORATORY PIXEL ANALYSIS (after S8; CPU only = no GPU quota; ~1-2 h; changes no pass/fail result)
+   a. Noise-level function with MEASURED points for real / generated / generated+noise, both datasets.
+   b. CMMD downsampling sweep: noise-level function of the original 2294x1914 DICOMs at full, 1/2, 1/4 and 256 px -
+      shows directly whether photon-noise structure survives at 256 px (answers attack #2 and explains C4).
+   c. Radial power spectrum (NPS-like) real vs generated, both datasets.
+   d. Intensity CDFs and 1st/50th/99th percentiles per checkpoint.
+   e. Pixel-space nearest-neighbour memorisation against training images; KID vs number of images (sample-size curve).
+   f. CBIS scanner/digitiser breakdown if the metadata exists (does the noise curve depend on the scanner?).
+   All labelled EXPLORATORY in the paper.

@@ -1,0 +1,146 @@
+NOTE: S12 report rebuilt after S12b (2026-10-23). S12b ran ONLY the secondary configurations that had not run in S12 because of a code error
+(patch amplitude encoding: 48 numbers < 64 amplitudes; fixed by zero-padding). All other results are the original S12 files, unchanged.
+Rebuilt from the S12 + S12b prediction files with the same s12_stats.py (the in-notebook rebuild failed; parameter counts restored from S12 metadata).
+
+S12 REPORT - quantum (VQC) classifier as in the supervisor's poster, benign vs malignant, CMMD + CBIS-DDSM
+(rules: S12_preregistration.txt)
+========================================================================================================================
+Simulation: exact state-vector simulator (verified against dense matrices; PennyLane cross-check below). No quantum hardware.
+8 qubits x 4 layers = 96 circuit + 18 dense parameters; VQC = 5 seeds, MLP = 5 seeds, CNNs = 3 seeds, LR / SVMs deterministic.
+PennyLane 0.45.1 cross-check: max |<Z> difference| 6.5e-16
+
+########################################################################################################################
+DATASET: CMMD   (all arms present)
+########################################################################################################################
+RESULTS TABLE - CMMD TEST (ensemble = mean probability over seeds; threshold 0.5 for accuracy / precision / recall / F1)
+  model                                       params seeds    AUC  seed AUC mean+-SD    acc   prec    rec     F1
+  Classical CNN (small, scratch)            full net     3  0.592       0.590+-0.022  0.584  0.577  0.705  0.635
+  ResNet50                                  full net     3  0.680       0.659+-0.024  0.616  0.607  0.710  0.654
+  EfficientNet-B0                           full net     3  0.672       0.661+-0.014  0.612  0.661  0.496  0.566
+  ConvNeXt-Tiny                             full net     3  0.746       0.735+-0.005  0.674  0.665  0.728  0.695
+  CNN-PCA8 + logistic regression                   9     1  0.726              0.726  0.669  0.682  0.661  0.671
+  CNN-PCA8 + MLP (matched size)                  112     5  0.729       0.727+-0.003  0.683  0.694  0.679  0.686
+  CNN-PCA8 + RBF-kernel SVM                        -     1  0.720              0.720  0.669  0.679  0.670  0.674
+  CNN-PCA8 + quantum-kernel SVM                    -     1  0.706              0.706  0.648  0.646  0.692  0.668
+  Hybrid CNN+VQC                                 114     5  0.712       0.712+-0.003  0.689  0.702  0.683  0.692
+  Hybrid CNN+VQC, no entanglement                  -     5  0.712       0.712+-0.001  0.678  0.688  0.679  0.683
+  Hybrid CNN+VQC, data re-uploading                -     5  0.694       0.627+-0.017  0.644  0.655  0.643  0.649
+  patch-PCA8 + logistic regression                 9     1  0.546              0.546  0.527  0.534  0.589  0.561
+  patch-PCA8 + MLP (matched size)                112     5  0.517       0.515+-0.010  0.484  0.495  0.429  0.459
+  patch-PCA8 + RBF-kernel SVM                      -     1  0.532              0.532  0.523  0.537  0.487  0.511
+  patch-PCA8 + quantum-kernel SVM                  -     1  0.471              0.471  0.486  0.498  0.455  0.476
+  VQC on patches                                 114     5  0.501       0.499+-0.014  0.491  0.502  0.478  0.490
+  VQC on patches, no entanglement                  -     5  0.546       0.546+-0.010  0.511  0.523  0.500  0.511
+  VQC on patches, data re-uploading                -     5  0.482       0.497+-0.030  0.473  0.484  0.460  0.471
+  (frozen ConvNeXt that supplies the hybrid features, its own head: test AUC 0.729)
+
+PRIMARY ENDPOINTS on CMMD (98.33 % CI = Bonferroni over Q1-Q3; PASS = CI lower bound > 0)
+  Q1   AUC[Hybrid CNN+VQC] - AUC[CNN-PCA8 + MLP (matched size)] = -0.0170  CI98.33% -0.0369..+0.0015 -> fail
+  Q2   AUC[VQC on patches] - AUC[patch-PCA8 + MLP (matched size)] = -0.0168  CI98.33% -0.0610..+0.0242 -> fail
+  Q3   AUC[Hybrid CNN+VQC] - AUC[ConvNeXt-Tiny] = -0.0338  CI98.33% -0.0631..-0.0062 -> fail
+
+SECONDARY (95 % CI, descriptive)
+  S1   AUC[Hybrid CNN+VQC] - AUC[CNN-PCA8 + logistic regression] = -0.0140  CI95.00% -0.0306..+0.0018 -> CI includes 0
+  S2   AUC[VQC on patches] - AUC[patch-PCA8 + logistic regression] = -0.0450  CI95.00% -0.1008..+0.0079 -> CI includes 0
+  S3   AUC[Hybrid CNN+VQC] - AUC[ResNet50] = +0.0323  CI95.00% -0.0134..+0.0745 -> CI includes 0
+  S4   AUC[Hybrid CNN+VQC] - AUC[EfficientNet-B0] = +0.0407  CI95.00% -0.0052..+0.0863 -> CI includes 0
+  S5   AUC[Hybrid CNN+VQC] - AUC[Classical CNN (small, scratch)] = +0.1204  CI95.00% +0.0625..+0.1733 -> CI excludes 0
+  S6   AUC[Hybrid CNN+VQC] - AUC[VQC on patches] = +0.2118  CI95.00% +0.1487..+0.2821 -> CI excludes 0
+  S7   AUC[Hybrid CNN+VQC] - AUC[Hybrid CNN+VQC, no entanglement] = +0.0001  CI95.00% -0.0130..+0.0132 -> CI includes 0 | within +-0.02 (practically equivalent)
+  S8   AUC[VQC on patches] - AUC[VQC on patches, no entanglement] = -0.0454  CI95.00% -0.0952..+0.0047 -> CI includes 0
+  S9   AUC[Hybrid CNN+VQC, data re-uploading] - AUC[CNN-PCA8 + MLP (matched size)] = -0.0359  CI95.00% -0.0758..+0.0036 -> CI includes 0
+  S10  AUC[VQC on patches, data re-uploading] - AUC[patch-PCA8 + MLP (matched size)] = -0.0357  CI95.00% -0.0945..+0.0237 -> CI includes 0
+  S11  AUC[CNN-PCA8 + quantum-kernel SVM] - AUC[CNN-PCA8 + RBF-kernel SVM] = -0.0138  CI95.00% -0.0380..+0.0105 -> CI includes 0
+  S12  AUC[patch-PCA8 + quantum-kernel SVM] - AUC[patch-PCA8 + RBF-kernel SVM] = -0.0605  CI95.00% -0.1119..-0.0062 -> CI excludes 0
+
+ENCODINGS AND CIRCUIT SIZE (descriptive): each VQC vs its size-matched MLP and logistic regression on identical inputs
+  hybrid_q8_l4_angle           (main    ;  8 PCA numbers keep 36.5 % variance): VQC 0.712 (114 p) | MLP 0.729 (112 p) | LR 0.726
+  pure_q8_l4_angle             (main    ;  8 PCA numbers keep 83.3 % variance): VQC 0.501 (114 p) | MLP 0.517 (112 p) | LR 0.546
+  hybrid_q8_l4_angle_noent     (noent   ;  8 PCA numbers keep 36.5 % variance): VQC 0.712 (114 p) | MLP 0.729 (112 p) | LR 0.726
+  pure_q8_l4_angle_noent       (noent   ;  8 PCA numbers keep 83.3 % variance): VQC 0.546 (114 p) | MLP 0.517 (112 p) | LR 0.546
+  hybrid_q8_l4_angle_reup      (reupload;  8 PCA numbers keep 36.5 % variance): VQC 0.694 (114 p) | MLP 0.729 (112 p) | LR 0.726
+  pure_q8_l4_angle_reup        (reupload;  8 PCA numbers keep 83.3 % variance): VQC 0.482 (114 p) | MLP 0.517 (112 p) | LR 0.546
+  hybrid_q6_l4_amp             (encoding; 64 PCA numbers keep 66.8 % variance): VQC 0.676 (86 p) | MLP 0.711 (69 p) | LR 0.715
+  pure_q6_l4_amp               (encoding; 48 PCA numbers keep 100.0 % variance): VQC 0.514 (86 p) | MLP 0.571 (104 p) | LR 0.569
+  hybrid_q8_l4_basis           (encoding;  8 PCA numbers keep 36.5 % variance): VQC 0.686 (114 p) | MLP 0.729 (112 p) | LR 0.726
+  hybrid_q4_l2_angle           (size    ;  4 PCA numbers keep 29.7 % variance): VQC 0.720 (34 p) | MLP 0.730 (37 p) | LR 0.727
+  hybrid_q4_l4_angle           (size    ;  4 PCA numbers keep 29.7 % variance): VQC 0.713 (58 p) | MLP 0.727 (58 p) | LR 0.727
+  hybrid_q8_l2_angle           (size    ;  8 PCA numbers keep 36.5 % variance): VQC 0.724 (66 p) | MLP 0.725 (68 p) | LR 0.726
+
+BLOCH VECTORS (hybrid VQC, seed 0, test images): distance between class-mean Bloch vectors per qubit (max possible 2)
+  q0 0.553 | q1 0.042 | q2 0.016 | q3 0.025 | q4 0.010 | q5 0.013 | q6 0.023 | q7 0.004
+
+FEATURE-SPACE SEPARATION (silhouette score, test images; higher = classes more separated; -1..1)
+  classical PCA input (8 numbers)   : +0.022
+  quantum features <Z> (8 numbers)  : +0.116
+
+########################################################################################################################
+DATASET: CBIS-DDSM   (all arms present)
+########################################################################################################################
+RESULTS TABLE - CBIS-DDSM TEST (ensemble = mean probability over seeds; threshold 0.5 for accuracy / precision / recall / F1)
+  model                                       params seeds    AUC  seed AUC mean+-SD    acc   prec    rec     F1
+  Classical CNN (small, scratch)            full net     3  0.654       0.648+-0.005  0.611  0.515  0.688  0.589
+  ResNet50                                  full net     3  0.791       0.769+-0.005  0.709  0.619  0.736  0.672
+  EfficientNet-B0                           full net     3  0.774       0.763+-0.010  0.692  0.605  0.699  0.648
+  ConvNeXt-Tiny                             full net     3  0.792       0.777+-0.018  0.701  0.619  0.688  0.651
+  CNN-PCA8 + logistic regression                   9     1  0.762              0.762  0.694  0.611  0.677  0.642
+  CNN-PCA8 + MLP (matched size)                  112     5  0.757       0.757+-0.004  0.697  0.613  0.684  0.647
+  CNN-PCA8 + RBF-kernel SVM                        -     1  0.755              0.755  0.691  0.611  0.654  0.632
+  CNN-PCA8 + quantum-kernel SVM                    -     1  0.711              0.711  0.688  0.624  0.580  0.601
+  Hybrid CNN+VQC                                 114     5  0.738       0.734+-0.004  0.683  0.595  0.688  0.638
+  Hybrid CNN+VQC, no entanglement                  -     5  0.735       0.735+-0.001  0.697  0.610  0.699  0.652
+  Hybrid CNN+VQC, data re-uploading                -     5  0.711       0.646+-0.023  0.697  0.624  0.636  0.630
+  patch-PCA8 + logistic regression                 9     1  0.578              0.578  0.558  0.461  0.532  0.494
+  patch-PCA8 + MLP (matched size)                112     5  0.621       0.608+-0.015  0.584  0.489  0.580  0.531
+  patch-PCA8 + RBF-kernel SVM                      -     1  0.618              0.618  0.555  0.461  0.576  0.512
+  patch-PCA8 + quantum-kernel SVM                  -     1  0.572              0.572  0.566  0.469  0.539  0.502
+  VQC on patches                                 114     5  0.600       0.579+-0.013  0.563  0.468  0.576  0.517
+  VQC on patches, no entanglement                  -     5  0.581       0.581+-0.002  0.538  0.444  0.543  0.488
+  VQC on patches, data re-uploading                -     5  0.546       0.527+-0.033  0.522  0.424  0.498  0.458
+  (frozen ConvNeXt that supplies the hybrid features, its own head: test AUC 0.755)
+
+PRIMARY ENDPOINTS on CBIS-DDSM (98.33 % CI = Bonferroni over Q1-Q3; PASS = CI lower bound > 0)
+  Q1   AUC[Hybrid CNN+VQC] - AUC[CNN-PCA8 + MLP (matched size)] = -0.0194  CI98.33% -0.0334..-0.0054 -> fail
+  Q2   AUC[VQC on patches] - AUC[patch-PCA8 + MLP (matched size)] = -0.0215  CI98.33% -0.0584..+0.0172 -> fail
+  Q3   AUC[Hybrid CNN+VQC] - AUC[ConvNeXt-Tiny] = -0.0543  CI98.33% -0.0812..-0.0286 -> fail
+
+SECONDARY (95 % CI, descriptive)
+  S1   AUC[Hybrid CNN+VQC] - AUC[CNN-PCA8 + logistic regression] = -0.0240  CI95.00% -0.0349..-0.0136 -> CI excludes 0
+  S2   AUC[VQC on patches] - AUC[patch-PCA8 + logistic regression] = +0.0223  CI95.00% -0.0218..+0.0667 -> CI includes 0
+  S3   AUC[Hybrid CNN+VQC] - AUC[ResNet50] = -0.0531  CI95.00% -0.0896..-0.0179 -> CI excludes 0
+  S4   AUC[Hybrid CNN+VQC] - AUC[EfficientNet-B0] = -0.0364  CI95.00% -0.0757..+0.0043 -> CI includes 0
+  S5   AUC[Hybrid CNN+VQC] - AUC[Classical CNN (small, scratch)] = +0.0833  CI95.00% +0.0315..+0.1358 -> CI excludes 0
+  S6   AUC[Hybrid CNN+VQC] - AUC[VQC on patches] = +0.1379  CI95.00% +0.0853..+0.1921 -> CI excludes 0
+  S7   AUC[Hybrid CNN+VQC] - AUC[Hybrid CNN+VQC, no entanglement] = +0.0026  CI95.00% -0.0091..+0.0145 -> CI includes 0 | within +-0.02 (practically equivalent)
+  S8   AUC[VQC on patches] - AUC[VQC on patches, no entanglement] = +0.0187  CI95.00% -0.0220..+0.0593 -> CI includes 0
+  S9   AUC[Hybrid CNN+VQC, data re-uploading] - AUC[CNN-PCA8 + MLP (matched size)] = -0.0457  CI95.00% -0.0733..-0.0191 -> CI excludes 0
+  S10  AUC[VQC on patches, data re-uploading] - AUC[patch-PCA8 + MLP (matched size)] = -0.0754  CI95.00% -0.1212..-0.0288 -> CI excludes 0
+  S11  AUC[CNN-PCA8 + quantum-kernel SVM] - AUC[CNN-PCA8 + RBF-kernel SVM] = -0.0433  CI95.00% -0.0663..-0.0207 -> CI excludes 0
+  S12  AUC[patch-PCA8 + quantum-kernel SVM] - AUC[patch-PCA8 + RBF-kernel SVM] = -0.0454  CI95.00% -0.0853..-0.0066 -> CI excludes 0
+
+ENCODINGS AND CIRCUIT SIZE (descriptive): each VQC vs its size-matched MLP and logistic regression on identical inputs
+  hybrid_q8_l4_angle           (main    ;  8 PCA numbers keep 34.4 % variance): VQC 0.738 (114 p) | MLP 0.757 (112 p) | LR 0.762
+  pure_q8_l4_angle             (main    ;  8 PCA numbers keep 73.5 % variance): VQC 0.600 (114 p) | MLP 0.621 (112 p) | LR 0.578
+  hybrid_q8_l4_angle_noent     (noent   ;  8 PCA numbers keep 34.4 % variance): VQC 0.735 (114 p) | MLP 0.757 (112 p) | LR 0.762
+  pure_q8_l4_angle_noent       (noent   ;  8 PCA numbers keep 73.5 % variance): VQC 0.581 (114 p) | MLP 0.621 (112 p) | LR 0.578
+  hybrid_q8_l4_angle_reup      (reupload;  8 PCA numbers keep 34.4 % variance): VQC 0.711 (114 p) | MLP 0.757 (112 p) | LR 0.762
+  pure_q8_l4_angle_reup        (reupload;  8 PCA numbers keep 73.5 % variance): VQC 0.546 (114 p) | MLP 0.621 (112 p) | LR 0.578
+  hybrid_q6_l4_amp             (encoding; 64 PCA numbers keep 63.9 % variance): VQC 0.646 (86 p) | MLP 0.753 (69 p) | LR 0.752
+  pure_q6_l4_amp               (encoding; 48 PCA numbers keep 100.0 % variance): VQC 0.593 (86 p) | MLP 0.613 (104 p) | LR 0.612
+  hybrid_q8_l4_basis           (encoding;  8 PCA numbers keep 34.4 % variance): VQC 0.726 (114 p) | MLP 0.757 (112 p) | LR 0.762
+  hybrid_q4_l2_angle           (size    ;  4 PCA numbers keep 27.0 % variance): VQC 0.742 (34 p) | MLP 0.757 (37 p) | LR 0.759
+  hybrid_q4_l4_angle           (size    ;  4 PCA numbers keep 27.0 % variance): VQC 0.749 (58 p) | MLP 0.755 (58 p) | LR 0.759
+  hybrid_q8_l2_angle           (size    ;  8 PCA numbers keep 34.4 % variance): VQC 0.736 (66 p) | MLP 0.759 (68 p) | LR 0.762
+
+BLOCH VECTORS (hybrid VQC, seed 0, test images): distance between class-mean Bloch vectors per qubit (max possible 2)
+  q0 0.007 | q1 0.011 | q2 0.002 | q3 0.005 | q4 0.014 | q5 0.041 | q6 0.017 | q7 0.448
+
+FEATURE-SPACE SEPARATION (silhouette score, test images; higher = classes more separated; -1..1)
+  classical PCA input (8 numbers)   : +0.023
+  quantum features <Z> (8 numbers)  : +0.124
+
+========================================================================================================================
+OVERALL VERDICT (pre-registered): a question is SUPPORTED only if it PASSES on BOTH datasets
+  Q1: Hybrid CNN+VQC beats the same-size classical head on the same CNN features: CMMD fail | CBIS-DDSM fail -> NOT supported
+  Q2: VQC on patches beats the same-size classical head on the same patch features: CMMD fail | CBIS-DDSM fail -> NOT supported
+  Q3: Hybrid CNN+VQC beats a fully fine-tuned ConvNeXt-Tiny: CMMD fail | CBIS-DDSM fail -> NOT supported

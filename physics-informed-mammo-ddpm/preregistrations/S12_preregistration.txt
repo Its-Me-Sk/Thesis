@@ -1,0 +1,71 @@
+S12 PRE-REGISTRATION (version 2) - a variational quantum circuit (VQC) classifier for benign vs malignant mammograms,
+built as in the supervisor's poster ("How Quantum Hilbert Space Distinguishes Between Two Potato Leafs"), with fair
+classical controls and controls from the quantum-machine-learning literature, on TWO datasets.
+Version 1 written 2026-10-22 ~20:00 Asia/Dhaka (CMMD only). Version 2 written 2026-10-23 ~00:45 Asia/Dhaka, BEFORE any
+S12 code was run. Changes from v1: CBIS-DDSM added as a replication dataset; literature controls and the poster's other
+encodings added. If v1 was already registered, this v2 is registered as its amendment and v2 is the plan that is run.
+Results of an unrelated exploratory analysis (S9) had been seen before v2; S9 does not concern classification.
+==================================================================================================================
+
+WHY: the supervisor asked to apply the poster's pipeline (image -> patches -> quantum encoding -> VQC -> measurement ->
+dense layer -> softmax; compared with Classical CNN, ResNet50, EfficientNet and a Hybrid CNN+VQC) to our task. The
+poster's results table is labelled "Illustrative". S12 tests the claim under the same pre-registered standards as
+S8-S11. Key question: does the QUANTUM part add anything beyond a classical model of the same size on the same input?
+A large benchmark (Bowles, Ahmed & Schuld 2024, arXiv:2403.07059) found that simple classical models usually beat
+quantum classifiers and that removing entanglement often did not hurt; S12 includes those controls.
+
+DATA (identical caches and splits to S8/S11; patient-level splits):
+  CMMD cohort D1      : train-fit 1499 / validation 276 / test 438   (primary)
+  CBIS-DDSM (clean)   : train-fit 1989 / validation (S2 split) / test 663   (replication)
+SIMULATION: no quantum hardware. Circuits are simulated exactly (state vector) on a classical computer with our own
+  batched simulator (qsim.py), verified against dense-matrix products and cross-checked against PennyLane
+  default.qubit (4 and 8 qubits; a difference > 1e-5 stops the run).
+
+POSTER PIPELINE AS IMPLEMENTED (all fixed now; identical for both datasets):
+  Patch features ("pure" VQC, poster "VQC (Ours)"): image 256 -> 64 x 64 (4x4 average), per-image min-max, 4 x 4 grid
+    of 16 x 16 patches, per patch (mean, standard deviation, high-pass energy) -> 48 numbers.
+  CNN features ("hybrid", poster "Hybrid CNN+VQC"): the frozen ConvNeXt-Tiny classifier of each dataset, trained earlier
+    with the fixed S2 recipe on that dataset's train-fit images (CMMD: cmmd_clf_s0.pt from S8; CBIS-DDSM: a6_clf_s0.pt
+    from S2), 768-d penultimate features (the KID-mammo layers). Disclosure: these networks saw the train-fit images, so
+    train-fit features are optimistic; this affects every head equally (Q1, Q2) and favours the hybrid in Q3.
+  Encoding (poster "Hybrid Encoding (PCA + Angle)"): standardise (train-fit statistics) -> PCA to n components (fitted
+    on train-fit) -> z-score -> angle = 2*arctan(z) -> RY(angle) on qubit i.
+  VQC: L layers of trainable RX, RY, RZ on every qubit + CNOT ring (0->1->...->n-1->0); readout <Z_i> of every qubit
+    -> dense layer (n -> 2) -> softmax. Parameters initialised N(0, 0.1^2) (near identity, against barren plateaus).
+  Main configuration: n = 8 qubits, L = 4 layers (96 circuit + 18 dense = 114 trainable parameters).
+  Training of all trainable heads: Adam lr 0.01, batch 64, 60 epochs, class-balanced cross-entropy, FINAL epoch, seeds 0-4.
+
+FAIR CONTROLS (identical inputs = the same PCA numbers):
+  MLP head (inputs -> h -> 2, tanh) with h chosen so its parameter count matches the VQC head (main: h = 10, 112 params).
+  Logistic regression (class-balanced). RBF-kernel SVM (C = 1, gamma "scale", class-balanced).
+LITERATURE CONTROLS / VARIANTS (secondary):
+  No-entanglement VQC (CNOT ring removed; Bowles et al. 2024) - does entanglement matter?
+  Data re-uploading VQC (encoding repeated before every layer; Perez-Salinas et al., Quantum 2020).
+  Quantum-kernel SVM (fixed entangling feature map, 2 x [RY(x), CNOT ring, RZ(x)], fidelity kernel; in the spirit of
+    Havlicek et al., Nature 2019) vs the RBF-kernel SVM on the same 8 numbers.
+  Poster's other encodings: amplitude encoding (64 PCA numbers on 6 qubits), basis encoding (sign bits on 8 qubits).
+  Circuit size: hybrid 4 qubits x 2 layers, 4 x 4, 8 x 2.
+  Run-time rule: main configurations always run; secondary configurations run in the order above and are skipped
+  (reported as missing) if 2.5 h of quantum computation per dataset are used up.
+POSTER BASELINES (full networks fine-tuned with the fixed S2 recipe: AdamW wd 0.05, batch 32, 15 epochs, cosine, flip +
+  small affine, class-balanced cross-entropy, final epoch; seeds 0, 1, 2; both datasets):
+  Classical CNN (4 conv blocks, from scratch, lr 1e-3), ResNet50, EfficientNet-B0, ConvNeXt-Tiny (ImageNet, lr 1e-4).
+
+PRIMARY ENDPOINTS (each dataset's test set; statistic = AUC of the seed ensemble = mean predicted probability; paired
+stratified bootstrap over test images, 2000 resamples; 98.33 % CI = Bonferroni over Q1-Q3; PASS = CI lower bound > 0):
+  Q1  Hybrid CNN+VQC  vs  CNN-PCA8 + matched MLP          (does the quantum head beat a same-size classical head?)
+  Q2  VQC on patches  vs  patch-PCA8 + matched MLP         (same question for the pure VQC)
+  Q3  Hybrid CNN+VQC  vs  fine-tuned ConvNeXt-Tiny         (the poster's claim that the hybrid beats CNNs)
+  A question is SUPPORTED only if it PASSES on BOTH datasets (replication rule; no further correction).
+SECONDARY (95 % CI, descriptive, both datasets): VQC vs logistic regression; hybrid VQC vs ResNet50, EfficientNet-B0,
+  small CNN; hybrid vs pure VQC; VQC vs no-entanglement VQC; re-uploading VQC vs matched MLP; quantum-kernel vs RBF SVM;
+  all encodings and sizes vs their matched MLP and logistic regression; results tables as in the poster (AUC, accuracy,
+  precision, recall, F1 at threshold 0.5); CI inside +-0.02 reported as "practically equivalent".
+FIGURES (as in the poster, all from real outputs): patch grid (box 2), circuit (box 5), Bloch vectors of individual
+  qubits for benign vs malignant test images (box 4), PCA / t-SNE of the quantum features <Z> next to the classical
+  input with silhouette scores (box 7), ROC curves and AUC bars (box 9). Box 8 of the poster is conceptual (no data).
+
+PREDICTIONS (written now): Q1 and Q2 not supported (no advantage of the quantum head over a classical head of equal size
+  on identical inputs). Q3 not supported. Removing entanglement changes AUC by less than 0.02. Quantum-kernel SVM not
+  better than RBF SVM.
+NO CHANGES after results: no new qubit/layer counts, epochs, learning rates, seeds, arms or metrics; no retry.
